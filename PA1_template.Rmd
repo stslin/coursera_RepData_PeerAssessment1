@@ -4,20 +4,34 @@ output:
   html_document:
     keep_md: true
 ---
-
-
-## Loading and preprocessing the data  
-```{r loading, echo = TRUE}
+```{r setlocale, echo = TRUE}
 Sys.setlocale(category = "LC_ALL", locale = "English")
+```
+
+## Loading and preprocessing the data
+Loading data and converting to proper formats.
+```{r loading, echo = TRUE}
 dataTable <- read.csv("activity.csv", colClasses = "character")
 dataTable$steps <- as.numeric(dataTable$steps)
 dataTable$date <- as.Date(dataTable$date, "%Y-%m-%d")
 dataTable$interval <- as.numeric(dataTable$interval)
+head(dataTable)
+```
+
+Generate a list of unique dates from data.
+```{r datelist, echo = TRUE}
 dateList <- sort(dataTable[!duplicated(dataTable[,"date"]),"date"])
+summary(dateList)
+```
+Generate a list of unique intervals from data.
+```{r intervallist, echo = TRUE}
 intervalList <- sort(dataTable[!duplicated(dataTable[,"interval"]),"interval"])
+summary(intervalList)
 ```
 
 ## What is mean total number of steps taken per day?  
+
+Histogram of steps:
 ```{r perday, echo = TRUE}
 dtStats <- data.frame(date = character(0), steps = numeric(0))
 dtStats$date <- as.Date(dtStats$date, "%Y-%m-%d")
@@ -33,11 +47,18 @@ for(currentDate in dateList)
   dtStats <- rbind(dtStats, tempDT)
 }
 
-meanSteps <- mean(dtStats$steps)
-medianSteps <- median(dtStats$steps)
+hist(dtStats$steps, breaks = 20, main="Number of Steps", xlab="Total number of steps taken each day", ylab = "Number of Days", col="red")
 ```
-The mean is: `r meanSteps`  
-The median is: `r medianSteps`  
+
+The mean number of steps:
+```{r meansteps, echo = TRUE}
+mean(dtStats$steps)
+```
+
+The median number of steps:
+```{r mediansteps, echo = TRUE}
+median(dtStats$steps)
+```
 
 ## What is the average daily activity pattern?  
 ```{r period, echo = TRUE}
@@ -56,18 +77,31 @@ for(currentInterval in intervalList)
   daStats <- rbind(daStats, tempDT)
 }
 
-maxInterval = daStats[max(daStats$steps), "interval"]
+plot(daStats$interval, daStats$steps,axes = F, type="l", col="green", xlab="Time", ylab="Average Number of Steps", main="Average Daily Activity Pattern")
+axis(1,at=c(0,600,1200,1800,2400), label = c("0:00","6:00","12:00","18:00","24:00"))
+axis(2)
 ```
-The 5-minute interval that contains the maximum number of steps is: `r maxInterval`  
+
+The 5-minute interval that contains the maximum number of steps is: 
+```{r maxperiod, echo = TRUE}
+daStats[max(daStats$steps), "interval"]
+``` 
 
 
 ## Imputing missing values  
-```{r missing, echo = TRUE}
+
+Number of NA Values:
+```{r nummissing, echo = TRUE}
 
 revDataTable <- dataTable
 
-numNA <- length(revDataTable[is.na(revDataTable$steps), "steps"])
+length(revDataTable[is.na(revDataTable$steps), "steps"])
+```
 
+Strategy: Daily averages were used to fill the NA values whenever daily averages are avaliable. If daily averages are not avaliable, the averages of the 5 minute time slot across all dates for the time slot having the NA value is used.
+
+Creating a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r missing, echo = TRUE}
 for(currentDate in dateList)
 {
   dailySteps <- revDataTable[currentDate == revDataTable$date, "steps"]
@@ -99,14 +133,53 @@ for(currentDate in dateList)
   
   revStats <- rbind(revStats, tempDT)
 }
-
-revMeanSteps <- mean(revStats$steps)
-revMedianSteps <- median(revStats$steps)
+head(revStats)
 ```
-Daily averages were used to fill the NA values whenever daily averages are avaliable. If daily averages are not avaliable, the averages of the 5 minute time slot across all dates for the time slot having the NA value is used.
 
-The revised mean is: `r revMeanSteps`  
-The revised median is: `r revMedianSteps`  
+Histogram of the total number of steps taken each day:
+```{r hismissing, echo = TRUE}
+hist(revStats$steps, breaks = 20, main="Number of Steps", xlab="Total number of steps taken each day", ylab = "Number of Days", col="red")
+```
+
+The revised mean is:
+```{r meanmissing, echo = TRUE}
+mean(revStats$steps)
+````
+
+The revised median is: 
+```{r medianmissing, echo = TRUE}
+median(revStats$steps)
+``` 
+
+These values differ from the estimates from the first part of the assignment.
+
+The impact of imputing missing data increased the mean of the total daily number of steps while the median of the total daily number of steps remained the same.
 
 ## Are there differences in activity patterns between weekdays and weekends?
 
+Label each day as weekend or weekday.
+```{r dayofweek, echo = TRUE}
+numrows <- length(dateList)
+dateDT <- data.frame(date = numeric(numrows), weekdays = character(numrows), daytype = character(numrows))
+dateDT$date <- as.Date(dateList, origin="1970-01-01")
+dateDT$weekdays <- weekdays(as.Date(dateDT$date))
+dateDT$daytype <- ifelse(dateDT$weekdays %in% c("Saturday", "Sunday"),"Weekend", "Weekday")
+revDataTable <- merge(revDataTable, dateDT, "date")
+head(revDataTable)
+```
+
+Calcluating the average for each interval of each day type.
+```{r intervalavgbyday, echo = TRUE}
+avgIntervalByDay <- aggregate(revDataTable$steps, by=list(revDataTable$interval, revDataTable$daytype), mean)
+colnames(avgIntervalByDay)[1] <- "interval"
+colnames(avgIntervalByDay)[2] <- "daytype"
+colnames(avgIntervalByDay)[3] <- "meansteps"
+head(avgIntervalByDay)
+tail(avgIntervalByDay)
+```
+
+Creating the plot of the average for each interval of each day type.
+```{r intervalavgbydayplot, echo = TRUE}
+library(lattice)
+xyplot(meansteps ~ interval | daytype, data = avgIntervalByDay, layout = c(1, 2), type="l", xlab = "Interval", ylab = "Number of steps", col="green")
+```
